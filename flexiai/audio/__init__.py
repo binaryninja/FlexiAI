@@ -324,7 +324,7 @@ class AudioUtils:
     """Utility functions for audio processing."""
 
     @staticmethod
-    def frames_to_wav_file(frames: list, sample_rate: int, output_file: str) -> bool:
+    def frames_to_wav_file(frames: list, sample_rate: int, output_file: str, measure_latency: bool = False) -> bool:
         """
         Save audio frames to WAV file.
 
@@ -336,15 +336,33 @@ class AudioUtils:
         Returns:
             True if successful
         """
+        if measure_latency:
+            wav_write_start = time.time()
+            header_start = time.time()
+
         try:
             with wave.open(output_file, 'wb') as wav_file:
                 wav_file.setnchannels(1)  # Mono
                 wav_file.setsampwidth(2)  # 16-bit
                 wav_file.setframerate(sample_rate)
 
-                # Write all frames
+                if measure_latency:
+                    header_time = time.time() - header_start
+                    write_start = time.time()
+
                 for frame in frames:
                     wav_file.writeframes(frame)
+
+                if measure_latency:
+                    write_time = time.time() - write_start
+
+            if measure_latency:
+                total_write_time = time.time() - wav_write_start
+                debug_print(f"📁 WAV File Creation Breakdown:")
+                debug_print(f"   • Header setup: {header_time*1000:.1f}ms")
+                debug_print(f"   • Frame writing: {write_time*1000:.1f}ms")
+                debug_print(f"   • Total WAV write: {total_write_time*1000:.1f}ms")
+                debug_print(f"   • Frames written: {len(frames)}")
 
             debug_print(f"Audio saved to: {output_file}")
             return True
@@ -380,7 +398,7 @@ class AudioUtils:
         return audio_array
 
     @staticmethod
-    def create_temp_wav_file(frames: list, sample_rate: int) -> Optional[str]:
+    def create_temp_wav_file(frames: list, sample_rate: int, measure_latency: bool = False) -> Optional[str]:
         """
         Create a temporary WAV file from audio frames.
 
@@ -391,10 +409,28 @@ class AudioUtils:
         Returns:
             Path to temporary WAV file
         """
+        if measure_latency:
+            temp_creation_start = time.time()
+            temp_file_start = time.time()
+
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.wav')
         temp_file.close()
 
-        if AudioUtils.frames_to_wav_file(frames, sample_rate, temp_file.name):
+        if measure_latency:
+            temp_file_time = time.time() - temp_file_start
+            wav_write_start = time.time()
+
+        success = AudioUtils.frames_to_wav_file(frames, sample_rate, temp_file.name, measure_latency)
+
+        if measure_latency:
+            wav_write_time = time.time() - wav_write_start
+            total_temp_time = time.time() - temp_creation_start
+            debug_print(f"🎯 Temp File Creation Summary:")
+            debug_print(f"   • Temp file creation: {temp_file_time*1000:.1f}ms")
+            debug_print(f"   • WAV writing: {wav_write_time*1000:.1f}ms")
+            debug_print(f"   • Total temp file overhead: {total_temp_time*1000:.1f}ms")
+
+        if success:
             return temp_file.name
         else:
             return None

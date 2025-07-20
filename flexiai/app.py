@@ -69,6 +69,7 @@ Examples:
         # Model configuration
         parser.add_argument(
             "--model",
+            #default="mistralai/Voxtral-Small-24B-2507",
             default="mistralai/Voxtral-Mini-3B-2507",
             help="Model to use (default: %(default)s)"
         )
@@ -131,6 +132,11 @@ Examples:
             "--debug",
             action="store_true",
             help="Enable debug output"
+        )
+        parser.add_argument(
+            "--measure-latency",
+            action="store_true",
+            help="Enable detailed latency measurements for optimization analysis"
         )
 
         return parser.parse_args()
@@ -415,35 +421,74 @@ Examples:
                 print("✗ Assistant model not available")
                 return
 
-            self.transcription_start_time = time.time()
+            # Start timing measurements
+            if self.args.measure_latency:
+                total_start_time = time.time()
+                file_creation_start = time.time()
 
-            # Create temporary audio file
-            temp_file = AudioUtils.create_temp_wav_file(frames, 16000)
+            temp_file = AudioUtils.create_temp_wav_file(frames, 16000, self.args.measure_latency)
+
+            if self.args.measure_latency:
+                file_creation_time = time.time() - file_creation_start
+
             if not temp_file:
                 print("✗ Failed to create temporary audio file")
                 return
 
             try:
-                # Generate assistant response
+                # Measure model inference latency
+                if self.args.measure_latency:
+                    inference_start_time = time.time()
+
                 response = self.assistant_model.generate_response(
                     temp_file,
-                    prompt="Please provide a helpful response to the user's audio input."
+                    prompt="Please provide a helpful response to the user's audio input.",
+                    measure_latency=self.args.measure_latency
                 )
 
+                if self.args.measure_latency:
+                    inference_time = time.time() - inference_start_time
+
                 if response.strip():
-                    # Copy to clipboard
+                    # Measure clipboard operation
+                    if self.args.measure_latency:
+                        clipboard_start = time.time()
+
                     pyperclip.copy(response)
 
-                    # Calculate timing
-                    processing_time = time.time() - self.transcription_start_time
-                    audio_duration = stats.get('duration_seconds', 0)
+                    if self.args.measure_latency:
+                        clipboard_time = time.time() - clipboard_start
+                        total_time = time.time() - total_start_time
+                        audio_duration = stats.get('duration_seconds', 0)
 
-                    print(f"🤖 Assistant response ({processing_time:.1f}s): {response}")
-                    debug_print(f"Audio duration: {audio_duration:.1f}s, Processing time: {processing_time:.1f}s")
+                        # Detailed latency breakdown
+                        print(f"🤖 Assistant response ({total_time:.1f}s): {response}")
+                        print(f"📊 Latency Breakdown:")
+                        print(f"   • File creation: {file_creation_time*1000:.1f}ms")
+                        print(f"   • Model inference: {inference_time*1000:.1f}ms")
+                        print(f"   • Clipboard copy: {clipboard_time*1000:.1f}ms")
+                        print(f"   • Total processing: {total_time*1000:.1f}ms")
+                        print(f"   • Audio duration: {audio_duration*1000:.1f}ms")
+
+                        # Log optimization potential
+                        file_io_overhead = file_creation_time / total_time * 100
+                        debug_print(f"File I/O represents {file_io_overhead:.1f}% of total latency")
+                        debug_print(f"Potential savings from streaming optimization: {file_creation_time*1000:.1f}ms")
+                    else:
+                        # Standard output without latency details
+                        processing_time = time.time() - total_start_time if self.args.measure_latency else 0
+                        print(f"🤖 Assistant response: {response}")
 
                     # Generate TTS if enabled
                     if self.tts_model:
+                        if self.args.measure_latency:
+                            tts_start = time.time()
+
                         self._generate_tts(response)
+
+                        if self.args.measure_latency:
+                            tts_time = time.time() - tts_start
+                            print(f"   • TTS generation: {tts_time*1000:.1f}ms")
 
                     # Send notification
                     try:
@@ -457,11 +502,18 @@ Examples:
                     print("⚠️ Assistant generated empty response")
 
             finally:
-                # Clean up temporary file
+                # Measure file cleanup latency
+                if self.args.measure_latency:
+                    cleanup_start = time.time()
+
                 try:
                     os.unlink(temp_file)
                 except:
                     pass
+
+                if self.args.measure_latency:
+                    cleanup_time = time.time() - cleanup_start
+                    debug_print(f"File cleanup time: {cleanup_time*1000:.1f}ms")
 
         except Exception as e:
             print(f"✗ Assistant processing failed: {e}")
