@@ -20,10 +20,26 @@ git+https://github.com/nari-labs/dia.git#egg=dia
 # ElevenLabs TTS support dependencies
 elevenlabs>=1.0.0
 
-# PyTorch (required for Voxtral support)
+# PyTorch (required for Voxtral and Whisper GPU support)
+# NOTE: Install PyTorch separately based on your GPU:
+#
+# For RTX 5090 and newer (CUDA 12.8):
+#   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+#
+# For RTX 4090 and RTX 40-series (CUDA 12.1):
+#   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+#
+# For older GPUs (CUDA 11.8):
+#   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+#
+# CPU-only (no GPU acceleration):
+#   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+#
+# Fallback version (will auto-detect CUDA but may not be optimal):
+# Fallback version (will auto-detect CUDA but may not be optimal):
 torch>=2.0.0
-# torchvision>=0.15.0  # Optional
-# torchaudio>=2.0.0    # Optional
+torchvision>=0.15.0
+torchaudio>=2.0.0
 
 # For development/testing (optional)
 # pytest>=7.0.0

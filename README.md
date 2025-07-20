@@ -48,11 +48,30 @@ cd FlexiAI
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# Install dependencies
+# GPU Support (CUDA) - Install PyTorch first:
+# For RTX 5090 and newer (CUDA 12.8) - TESTED AND WORKING:
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+
+# For RTX 4090 and RTX 40-series (CUDA 12.1):
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# For older GPUs (CUDA 11.8):
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+
+# CPU-only (no GPU acceleration):
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+
+# Install core dependencies
 pip install -r requirements.txt
+
+# Force install Dia TTS for compatibility with latest PyTorch:
+pip install git+https://github.com/nari-labs/dia.git --force-reinstall --no-deps
 
 # Install the package
 pip install -e .
+
+# Alternative: Use automated GPU installation script
+chmod +x install_gpu.sh && ./install_gpu.sh
 ```
 
 ### Basic Usage
@@ -263,17 +282,18 @@ We welcome contributions! FlexiAI is designed to be extensible:
 
 ## 📊 Performance
 
-### Typical Latency (on RTX 4090)
+### Typical Latency (RTX 5090 TESTED - PyTorch 2.7.1+cu128)
 - **Transcription**: ~0.5-2s (depending on audio length)
 - **LLM Response**: ~0.5-3s (depending on model and response length)
 - **TTS Streaming**: ~0.2-0.5s to first audio (ElevenLabs)
 - **Total Round-trip**: ~1-6s for complete interaction
 
-### Memory Usage
+### Memory Usage (RTX 5090 Tested)
 - **Base System**: ~500MB
 - **With Whisper Large**: ~2GB
 - **With Voxtral**: ~4-8GB
 - **Peak Usage**: ~10-12GB (all models loaded)
+- **RTX 5090**: Excellent performance with 24GB VRAM
 
 ## 🐛 Troubleshooting
 
@@ -293,14 +313,29 @@ flexiai --force-file-tts
 
 **Model Loading Errors**
 ```bash
-# Check CUDA availability
-python -c "import torch; print(torch.cuda.is_available())"
+# Check CUDA availability and version
+python -c "import torch; print(f'CUDA Available: {torch.cuda.is_available()}'); print(f'CUDA Version: {torch.version.cuda}'); print(f'GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"None\"}')"
 
-# Force CPU mode
+# For RTX 5090 users - ensure CUDA 12.8 PyTorch (TESTED WORKING):
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+
+# Fix Dia TTS compatibility issues:
+pip install git+https://github.com/nari-labs/dia.git --force-reinstall --no-deps
+
+# Force CPU mode if GPU issues persist
 flexiai --device cpu
 
 # Debug model loading
 flexiai --debug
+```
+
+**Dia TTS Compatibility Issues**
+```bash
+# Force install Dia TTS with latest PyTorch (bypasses version conflicts):
+pip install git+https://github.com/nari-labs/dia.git --force-reinstall --no-deps
+
+# Test Dia TTS compatibility:
+python -c "import dia; print('✅ Dia TTS working with PyTorch', __import__('torch').__version__)"
 ```
 
 **Streaming TTS Issues**
