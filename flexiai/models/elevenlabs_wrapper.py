@@ -3,6 +3,7 @@ ElevenLabs TTS Model wrapper for HoldTranscribe compatibility.
 """
 
 import logging
+import os
 from typing import Optional, Any
 from . import TTSModel, ModelType
 from .elevenlabs_model import ElevenLabsTTSModel
@@ -26,16 +27,25 @@ class ElevenLabsTTSWrapper(TTSModel):
 
         # Extract ElevenLabs-specific parameters
         self.api_key = kwargs.get('api_key')
-        self.voice_id = kwargs.get('voice_id', "0r9ASVieiCDRpXbR4dCC") # 21m00Tcm4TlvDq8ikWAM
+        self.voice_id = kwargs.get('voice_id') or os.getenv('ELEVENLABS_VOICE_ID') or "0r9ASVieiCDRpXbR4dCC" # 21m00Tcm4TlvDq8ikWAM
         self.voice_settings = kwargs.get('voice_settings')
         self.output_format = kwargs.get('output_format', "mp3_44100_128")
 
+        # Log voice ID source for debugging
+        if kwargs.get('voice_id'):
+            logger.info(f"Using voice ID from parameter: {self.voice_id}")
+        elif os.getenv('ELEVENLABS_VOICE_ID'):
+            logger.info(f"Using voice ID from environment variable: {self.voice_id}")
+        else:
+            logger.info(f"Using default voice ID: {self.voice_id}")
+
         # Initialize the actual ElevenLabs model
-        # Remove api_key from kwargs to avoid conflict
-        elevenlabs_kwargs = {k: v for k, v in kwargs.items() if k != 'api_key'}
+        # Remove api_key and voice_id from kwargs to avoid conflict
+        elevenlabs_kwargs = {k: v for k, v in kwargs.items() if k not in ['api_key', 'voice_id']}
         self.elevenlabs_model = ElevenLabsTTSModel(
             api_key=self.api_key,
             model_id=model_name,
+            voice_id=self.voice_id,
             **elevenlabs_kwargs
         )
 

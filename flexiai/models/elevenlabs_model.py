@@ -18,14 +18,15 @@ logger = logging.getLogger(__name__)
 class ElevenLabsTTSModel:
     """ElevenLabs Text-to-Speech model implementation"""
 
-    def __init__(self, api_key: Optional[str] = None, model_id: str = "eleven_multilingual_v2", **kwargs):
+    def __init__(self, api_key: str = None, model_id: str = "eleven_multilingual_v2", voice_id: str = None, **kwargs):
         """
-        Initialize ElevenLabs TTS model
+        Initialize ElevenLabs TTS model.
 
         Args:
-            api_key: ElevenLabs API key (if None, will try to get from environment)
-            model_id: Model to use for synthesis
-            **kwargs: Additional configuration options
+            api_key: ElevenLabs API key
+            model_id: Model ID to use
+            voice_id: Voice ID to use (defaults to environment variable or built-in default)
+            **kwargs: Additional parameters
         """
         if not ELEVENLABS_AVAILABLE:
             raise ImportError("ElevenLabs package not installed. Install with: pip install elevenlabs")
@@ -35,8 +36,8 @@ class ElevenLabsTTSModel:
         self.client = None
         self.loaded = False
 
-        # Default settings
-        self.voice_id = "21m00Tcm4TlvDq8ikWAM"  # Default voice
+        # Default settings - check voice_id parameter, then environment variable, then default
+        self.voice_id = voice_id or os.getenv("ELEVENLABS_VOICE_ID") or "21m00Tcm4TlvDq8ikWAM"  # Default voice
         self.voice_settings = VoiceSettings(
             stability=0.5,
             similarity_boost=0.5,
