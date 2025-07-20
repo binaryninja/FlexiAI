@@ -6,6 +6,8 @@ import tempfile
 import wave
 import json
 import re
+import requests
+import os
 from typing import Optional, Any, List, Dict, Callable
 
 try:
@@ -17,6 +19,7 @@ except ImportError:
 
 from . import AssistantModel
 from ..utils import debug_print
+from ..tools.registry import tool_registry
 
 
 class VoxtralAssistantModel(AssistantModel):
@@ -41,45 +44,54 @@ class VoxtralAssistantModel(AssistantModel):
             print(f"⚠️ Warning: Using untested model '{model_name}'. Recommended: 'mistralai/Voxtral-Mini-3B-2507'")
 
     def _setup_builtin_functions(self):
-        """Setup built-in functions for testing."""
-        self.available_functions = {
-            'get_weather': self._get_weather_info
-        }
+        """Setup built-in functions using modular tool system."""
+        # Get available tools from the tool registry
+        available_tools = tool_registry.list_available_tools()
 
-    def _get_weather_info(self, location: str) -> str:
+        self.available_functions = {}
+        for tool_name in available_tools:
+            tool = tool_registry.get_tool(tool_name)
+            if tool:
+                # Create a wrapper function that uses the tool system
+                self.available_functions[tool_name] = self._create_tool_wrapper(tool_name)
+
+        debug_print(f"🔧 Registered {len(self.available_functions)} tools: {list(self.available_functions.keys())}")
+
+    def _create_tool_wrapper(self, tool_name: str):
         """
-        Get weather information for a location (hardcoded for testing).
+        Create a wrapper function for a tool that converts tool results to JSON strings.
 
         Args:
-            location: The location to get weather for
+            tool_name: Name of the tool to wrap
 
         Returns:
-            JSON string with weather information
+            Wrapper function that executes the tool and returns JSON string
         """
-        # Hardcoded response for testing - vary based on location for realism
-        import random
+        def tool_wrapper(**kwargs):
+            try:
+                # Execute the tool using the tool registry
+                result = tool_registry.execute_tool(tool_name, **kwargs)
 
-        # Base temperature and conditions
-        temps = ["18°C", "22°C", "15°C", "25°C", "20°C"]
-        conditions = ["Partly cloudy", "Sunny", "Cloudy", "Light rain", "Clear skies"]
-        humidity_levels = ["60%", "65%", "72%", "58%", "68%"]
-        wind_speeds = ["12 km/h NW", "15 km/h SW", "8 km/h E", "20 km/h W", "5 km/h N"]
+                if result.success:
+                    # Return the tool data as JSON string
+                    return json.dumps(result.data, indent=2)
+                else:
+                    # Return error information as JSON
+                    error_data = {
+                        "error": result.error,
+                        "metadata": result.metadata
+                    }
+                    return json.dumps(error_data)
 
-        # Simple hash-based selection for consistency
-        location_hash = hash(location.lower()) % len(temps)
+            except Exception as e:
+                debug_print(f"❌ Error executing tool {tool_name}: {e}")
+                error_data = {
+                    "error": f"Tool execution failed: {str(e)}",
+                    "tool": tool_name
+                }
+                return json.dumps(error_data)
 
-        weather_data = {
-            "location": location,
-            "temperature": temps[location_hash],
-            "condition": conditions[location_hash],
-            "humidity": humidity_levels[location_hash],
-            "wind": wind_speeds[location_hash],
-            "pressure": "1013 hPa",
-            "forecast": "Expect similar conditions throughout the day with possible changes this evening."
-        }
-
-        debug_print(f"🌤️ Generated weather data for {location}: {weather_data['temperature']}, {weather_data['condition']}")
-        return json.dumps(weather_data)
+        return tool_wrapper
 
     def register_function(self, name: str, func: Callable, description: str, parameters: Dict):
         """
@@ -315,29 +327,59 @@ class VoxtralAssistantModel(AssistantModel):
             # Execute the function
             if function_name in self.available_functions:
                 function_result = self.available_functions[function_name](**function_args)
-                debug_print(f"🔧 Function result: {function_result}")
+                debug_print(f"🔧 Function result (raw): {function_result}")
+                debug_print(f"🔧 Function result type: {type(function_result)}")
+                debug_print(f"🔧 Function result length: {len(str(function_result))}")
 
                 # Parse the function result to make it more conversational
                 try:
                     function_data = json.loads(function_result)
+                    debug_print(f"🔧 Parsed function_data: {json.dumps(function_data, indent=2)}")
+
+                    # Check if the function returned an error
+                    if 'error' in function_data:
+                        error_msg = function_data['error']
+                        metadata = function_data.get('metadata', {})
+                        location = metadata.get('location', 'the requested location')
+
+                        debug_print(f"🔧 Function returned error: {error_msg}")
+
+                        if 'network' in error_msg.lower() or 'connection' in error_msg.lower():
+                            return f"I'm sorry, I'm having trouble connecting to the weather service right now to get the weather for {location}. Please try again in a moment."
+                        elif 'api key' in error_msg.lower():
+                            return f"I'm sorry, there's an issue with the weather service configuration. The weather data is temporarily unavailable."
+                        elif 'location' in error_msg.lower():
+                            return f"I couldn't find weather information for '{location}'. Could you please specify the location more clearly, perhaps including the city and state or country?"
+                        else:
+                            return f"I'm sorry, I encountered an issue while getting the weather information for {location}. Please try again."
+
                     location = function_data.get('location', 'the requested location')
-                    temp = function_data.get('temperature', 'unknown')
-                    condition = function_data.get('condition', 'unknown')
-                    humidity = function_data.get('humidity', 'unknown')
-                    wind = function_data.get('wind', 'unknown')
-                    forecast = function_data.get('forecast', '')
+                    debug_print(f"🔧 Extracted location: {location}")
+
+                    current = function_data.get('current', {})
+                    debug_print(f"🔧 Extracted current: {current}")
+
+                    temp = current.get('temperature', 'unknown')
+                    condition = current.get('condition', 'unknown')
+                    humidity = current.get('humidity', 'unknown')
+                    wind = current.get('wind', 'unknown')
+                    summary = function_data.get('summary', '')
+
+                    debug_print(f"🔧 Weather fields - temp: {temp}, condition: {condition}, humidity: {humidity}, wind: {wind}")
+                    debug_print(f"🔧 Summary: {summary}")
 
                     # Create a natural response using the weather data
                     natural_response = f"The weather in {location} is currently {temp} and {condition.lower()}. "
                     natural_response += f"The humidity is {humidity} with winds at {wind}. "
-                    if forecast:
-                        natural_response += f"{forecast}"
+                    if summary:
+                        natural_response += f"{summary}"
 
                     debug_print(f"🎯 Generated natural response from function result")
                     return natural_response.strip()
 
-                except json.JSONDecodeError:
+                except json.JSONDecodeError as e:
                     # If function result isn't JSON, create a simple response
+                    debug_print(f"🔧 JSON decode error: {e}")
                     natural_response = f"I've retrieved the information you requested: {function_result}"
                     debug_print(f"🎯 Generated simple response from function result")
                     return natural_response

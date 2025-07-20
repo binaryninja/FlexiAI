@@ -17,6 +17,7 @@ from typing import Optional, Union
 from .models import ModelFactory, ModelType, model_registry, TranscriptionModel, AssistantModel, TTSModel
 from .audio import AudioRecorder, AudioUtils
 from .utils import set_debug, debug_print, get_memory_usage, detect_device, get_platform_hotkey, print_system_info
+from .mcp.integration import MCPToolIntegration
 
 
 class FlexiAIApp:
@@ -31,6 +32,9 @@ class FlexiAIApp:
         self.transcription_model: Optional[TranscriptionModel] = None
         self.assistant_model: Optional[AssistantModel] = None
         self.tts_model: Optional[TTSModel] = None
+
+        # MCP integration
+        self.mcp_integration: Optional[MCPToolIntegration] = None
 
         # State tracking
         self.current_mode: Optional[str] = None
@@ -139,6 +143,29 @@ Examples:
             help="Enable detailed latency measurements for optimization analysis"
         )
 
+        # MCP (Model Context Protocol) configuration
+        parser.add_argument(
+            "--mcp-config",
+            default=None,
+            help="Path to MCP configuration file (YAML/JSON)"
+        )
+        parser.add_argument(
+            "--enable-mcp",
+            action="store_true",
+            help="Enable MCP (Model Context Protocol) integration for external tools"
+        )
+        parser.add_argument(
+            "--mcp-timeout",
+            type=float,
+            default=30.0,
+            help="Default timeout for MCP server connections (default: %(default)s)"
+        )
+        parser.add_argument(
+            "--disable-mcp-fallback",
+            action="store_true",
+            help="Disable fallback to built-in tools when MCP tools fail"
+        )
+
         return parser.parse_args()
 
     def initialize_models(self) -> bool:
@@ -217,6 +244,40 @@ Examples:
             print("🔊 Text-to-speech enabled for assistant responses")
 
         return True
+
+    async def initialize_mcp(self) -> bool:
+        """Initialize MCP (Model Context Protocol) integration."""
+        if not self.args.enable_mcp:
+            debug_print("MCP integration disabled")
+            return True
+
+        try:
+            debug_print("=== INITIALIZING MCP INTEGRATION ===")
+
+            # Initialize MCP integration
+            self.mcp_integration = MCPToolIntegration(self.args.mcp_config)
+            await self.mcp_integration.initialize()
+
+            # Get stats for reporting
+            stats = self.mcp_integration.get_stats()
+
+            debug_print(f"MCP servers connected: {stats.connected_servers}")
+            debug_print(f"MCP tools discovered: {stats.mcp_tools}")
+            debug_print(f"Built-in tools: {stats.builtin_tools}")
+            debug_print(f"Total tools available: {stats.total_tools}")
+
+            if stats.failed_connections > 0:
+                debug_print(f"Failed server connections: {stats.failed_connections}")
+
+            print(f"🔧 MCP integration initialized: {stats.mcp_tools} external tools from {stats.connected_servers} servers")
+
+            return True
+
+        except Exception as e:
+            print(f"⚠️ MCP initialization failed: {e}")
+            debug_print(f"MCP error details: {e}")
+            self.mcp_integration = None
+            return False
 
     def setup_audio(self) -> bool:
         """Initialize audio recording system."""
@@ -440,11 +501,27 @@ Examples:
                 if self.args.measure_latency:
                     inference_start_time = time.time()
 
+                # Get available tools (including MCP tools)
+                tools = None
+                if self.mcp_integration:
+                    try:
+                        tools = self.mcp_integration.get_tools_for_assistant()
+                        debug_print(f"Available tools for assistant: {len(tools)}")
+                    except Exception as e:
+                        debug_print(f"Failed to get MCP tools: {e}")
+
                 response = self.assistant_model.generate_response(
                     temp_file,
                     prompt="Please provide a helpful response to the user's audio input.",
+                    tools=tools,
                     measure_latency=self.args.measure_latency
                 )
+
+                # Check if response contains function calls that need MCP execution
+                if self.mcp_integration and tools and self._contains_function_call(response):
+                    debug_print("🔧 Function call detected, processing with MCP integration")
+                    import asyncio
+                    response = asyncio.run(self._handle_mcp_function_call(response, tools))
 
                 if self.args.measure_latency:
                     inference_time = time.time() - inference_start_time
@@ -1058,7 +1135,7 @@ Examples:
         except Exception as e:
             debug_print(f"System audio playback failed: {e}")
 
-    def run(self) -> int:
+    async def run(self) -> int:
         """Run the main application."""
         try:
             # Parse arguments
@@ -1093,6 +1170,10 @@ Examples:
             if not self.setup_input_handling():
                 return 1
 
+            # Initialize MCP integration
+            if not await self.initialize_mcp():
+                debug_print("WARNING: MCP initialization failed, continuing without MCP")
+
             debug_print("=== APPLICATION READY ===")
             debug_print("Waiting for hotkey input...")
 
@@ -1118,9 +1199,9 @@ Examples:
             return 1
 
         finally:
-            self.cleanup()
+            await self.cleanup()
 
-    def cleanup(self):
+    async def cleanup(self):
         """Cleanup application resources."""
         debug_print("=== APPLICATION CLEANUP ===")
 
@@ -1128,6 +1209,10 @@ Examples:
             # Stop audio recording if active
             if self.audio_recorder and self.audio_recorder.is_recording_active():
                 self.audio_recorder.stop_recording()
+
+            # Shutdown MCP integration
+            if self.mcp_integration:
+                await self.mcp_integration.shutdown()
 
             # Unload all models
             model_registry.clear()
@@ -1137,12 +1222,176 @@ Examples:
         except Exception as e:
             debug_print(f"Cleanup error: {e}")
 
+    def _contains_function_call(self, response: str) -> bool:
+        """Check if response contains a function call."""
+        # Simple check for function call patterns
+        function_call_patterns = [
+            "get_weather(",
+            "function_call:",
+            '"function":',
+            '"name":',
+            '"arguments":'
+        ]
 
-def main():
+        response_lower = response.lower()
+        for pattern in function_call_patterns:
+            if pattern.lower() in response_lower:
+                return True
+        return False
+
+    async def _handle_mcp_function_call(self, response: str, tools: list) -> str:
+        """Handle function calls using MCP integration."""
+        try:
+            import json
+            import re
+
+            # Try to extract function call from response
+            function_call_info = self._extract_function_call_from_response(response)
+
+            if not function_call_info:
+                debug_print("⚠️ Could not extract function call information from response")
+                return response
+
+            function_name = function_call_info.get('name')
+            function_args = function_call_info.get('arguments', {})
+
+            debug_print(f"🔧 Executing MCP tool: {function_name} with args: {function_args}")
+
+            # Execute the tool through MCP integration
+            result = await self.mcp_integration.execute_tool_unified(function_name, function_args)
+
+            if result.success:
+                debug_print(f"🔧 MCP tool execution successful")
+                # Format the result into a natural response
+                return self._format_tool_result(function_name, result.result, function_args)
+            else:
+                debug_print(f"⚠️ MCP tool execution failed: {result.error}")
+                return f"I'm sorry, I encountered an issue while executing the {function_name} function: {result.error}"
+
+        except Exception as e:
+            debug_print(f"⚠️ MCP function call handling failed: {e}")
+            return response
+
+    def _extract_function_call_from_response(self, response: str) -> dict:
+        """Extract function call information from model response."""
+        try:
+            import json
+            import re
+
+            # Try to find JSON-like function call structure
+            patterns = [
+                r'"function":\s*{\s*"name":\s*"([^"]+)",\s*"arguments":\s*({[^}]*})',
+                r'"name":\s*"([^"]+)",\s*"arguments":\s*({[^}]*})',
+                r'(\w+)\(([^)]*)\)',  # Simple function(args) pattern
+            ]
+
+            for pattern in patterns:
+                match = re.search(pattern, response)
+                if match:
+                    if len(match.groups()) >= 2:
+                        function_name = match.group(1)
+                        args_str = match.group(2)
+
+                        # Try to parse arguments
+                        try:
+                            if args_str.startswith('{'):
+                                arguments = json.loads(args_str)
+                            else:
+                                # Parse simple function arguments like: "location", "value"
+                                arguments = {}
+                                if args_str.strip():
+                                    # Simple parsing for common cases
+                                    if '"' in args_str:
+                                        # Extract quoted strings
+                                        quotes = re.findall(r'"([^"]*)"', args_str)
+                                        if quotes and function_name == "get_weather":
+                                            arguments = {"location": quotes[0]}
+
+                            return {"name": function_name, "arguments": arguments}
+                        except:
+                            continue
+
+            return None
+
+        except Exception as e:
+            debug_print(f"Function call extraction failed: {e}")
+            return None
+
+    def _format_tool_result(self, function_name: str, result: any, args: dict) -> str:
+        """Format tool execution result into natural language response."""
+        try:
+            if function_name == "get_weather":
+                return self._format_weather_result(result, args)
+            else:
+                # Generic formatting for other tools
+                if isinstance(result, str):
+                    return result
+                elif isinstance(result, dict):
+                    if 'error' in result:
+                        return f"I encountered an error: {result['error']}"
+                    elif 'result' in result:
+                        return str(result['result'])
+                    else:
+                        return f"Here's what I found: {str(result)}"
+                else:
+                    return f"Here's the result: {str(result)}"
+
+        except Exception as e:
+            debug_print(f"Result formatting failed: {e}")
+            return f"I completed the {function_name} function successfully."
+
+    def _format_weather_result(self, result: any, args: dict) -> str:
+        """Format weather tool result into natural language."""
+        try:
+            import json
+
+            location = args.get('location', 'the requested location')
+
+            if isinstance(result, str):
+                try:
+                    weather_data = json.loads(result)
+                except:
+                    return result
+            else:
+                weather_data = result
+
+            if isinstance(weather_data, dict):
+                if 'error' in weather_data:
+                    error_msg = weather_data['error']
+                    if 'network' in error_msg.lower() or 'connection' in error_msg.lower():
+                        return f"I'm sorry, I'm having trouble connecting to the weather service right now to get the weather for {location}."
+                    elif 'location' in error_msg.lower():
+                        return f"I couldn't find weather information for '{location}'. Could you please specify the location more clearly?"
+                    else:
+                        return f"I'm sorry, I encountered an issue while getting the weather information for {location}."
+
+                current = weather_data.get('current', {})
+                temp = current.get('temperature', 'unknown')
+                condition = current.get('condition', 'unknown')
+                humidity = current.get('humidity', 'unknown')
+                wind = current.get('wind', 'unknown')
+                summary = weather_data.get('summary', '')
+
+                response = f"The weather in {location} is currently {temp} and {condition.lower()}. "
+                response += f"The humidity is {humidity} with winds at {wind}."
+                if summary:
+                    response += f" {summary}"
+
+                return response.strip()
+
+            return str(result)
+
+        except Exception as e:
+            debug_print(f"Weather result formatting failed: {e}")
+            return f"I retrieved the weather information for {args.get('location', 'your location')}."
+
+
+async def main():
     """Main entry point."""
-    app = HoldTranscribeApp()
-    return app.run()
+    app = FlexiAIApp()
+    return await app.run()
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    import asyncio
+    sys.exit(asyncio.run(main()))

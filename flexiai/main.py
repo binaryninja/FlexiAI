@@ -8,13 +8,14 @@ Requirements:
   pip install --upgrade "mistral-common[audio]"
 """
 
+import asyncio
 import sys
 from .app import FlexiAIApp
 
 def main():
     """Main entry point for the HoldTranscribe application."""
     app = FlexiAIApp()
-    return app.run()
+    return asyncio.run(app.run())
 
 if __name__ == "__main__":
     sys.exit(main())

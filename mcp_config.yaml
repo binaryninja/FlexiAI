@@ -1,0 +1,238 @@
+# FlexiAI MCP (Model Context Protocol) Configuration
+#
+# This file configures external MCP servers that provide additional tools
+# to the FlexiAI voice assistant. Each server can expose different capabilities
+# like file system access, web search, calendar integration, etc.
+#
+# Format: YAML
+# Documentation: https://github.com/your-repo/FlexiAI/docs/mcp-integration.md
+
+# Global MCP client settings
+default_timeout: 30.0
+default_max_retries: 3
+default_retry_delay: 1.0
+
+# Tool discovery settings
+auto_discover_tools: true
+tool_discovery_interval: 300.0  # 5 minutes
+cache_tool_schemas: true
+schema_cache_ttl: 3600.0  # 1 hour
+
+# Error handling
+fail_on_server_error: false
+fallback_to_builtin_tools: true
+
+# Logging and debugging
+enable_request_logging: false
+enable_response_logging: false
+log_level: "INFO"
+
+# Performance settings
+concurrent_requests: 10
+request_pool_size: 100
+
+# MCP Server Configurations
+servers:
+  # Example: File System Server
+  # Provides file operations like read, write, list directories
+  - name: "filesystem"
+    url: "http://localhost:8001"
+    enabled: false  # Set to true to enable
+    timeout: 30.0
+    max_retries: 3
+    retry_delay: 1.0
+
+    # Authentication (optional)
+    # auth_type: "bearer"
+    # auth_token: "${FS_API_TOKEN}"
+
+    # Tool filtering - only allow specific file operations
+    allowed_tools:
+      - "read_file"
+      - "write_file"
+      - "list_directory"
+      - "create_directory"
+    blocked_tools:
+      - "delete_file"  # Block dangerous operations
+
+    # Server settings
+    use_sse: true
+    verify_ssl: true
+    custom_headers:
+      X-Client-Name: "FlexiAI"
+
+    # Rate limiting (optional)
+    rate_limit_requests_per_minute: 60
+    rate_limit_burst: 10
+
+    # Health check settings
+    health_check_enabled: true
+    health_check_interval: 60.0
+    health_check_timeout: 5.0
+
+  # Example: Web Search Server
+  # Provides web search and URL fetching capabilities
+  - name: "web_search"
+    url: "http://localhost:8002"
+    enabled: false  # Set to true to enable
+    timeout: 45.0
+
+    # API key authentication
+    auth_type: "api_key"
+    auth_token: "${WEB_SEARCH_API_KEY}"
+
+    allowed_tools:
+      - "search_web"
+      - "fetch_url"
+      - "summarize_webpage"
+
+    # Custom headers for API
+    custom_headers:
+      User-Agent: "FlexiAI/1.0"
+
+    rate_limit_requests_per_minute: 30
+
+  # Example: Calendar Server
+  # Provides calendar operations like creating events, checking availability
+  - name: "calendar"
+    url: "http://localhost:8003"
+    enabled: false  # Set to true to enable
+
+    # Bearer token authentication
+    auth_type: "bearer"
+    auth_token: "${CALENDAR_ACCESS_TOKEN}"
+
+    allowed_tools:
+      - "create_event"
+      - "list_events"
+      - "get_availability"
+      - "update_event"
+
+    # Don't allow deleting events through voice interface
+    blocked_tools:
+      - "delete_event"
+
+  # Example: Email Server
+  # Provides email operations
+  - name: "email"
+    url: "http://localhost:8004"
+    enabled: false  # Set to true to enable
+
+    # Basic authentication
+    auth_type: "basic"
+    auth_username: "${EMAIL_USERNAME}"
+    auth_password: "${EMAIL_PASSWORD}"
+
+    allowed_tools:
+      - "send_email"
+      - "list_emails"
+      - "search_emails"
+
+    rate_limit_requests_per_minute: 20
+
+  # Example: Task Management Server
+  # Integrates with task management systems like Todoist, Notion, etc.
+  - name: "tasks"
+    url: "http://localhost:8005"
+    enabled: false  # Set to true to enable
+
+    auth_type: "api_key"
+    auth_token: "${TASK_API_KEY}"
+
+    allowed_tools:
+      - "create_task"
+      - "list_tasks"
+      - "update_task"
+      - "complete_task"
+      - "search_tasks"
+
+  # Example: Knowledge Base Server
+  # Provides RAG (Retrieval Augmented Generation) capabilities
+  - name: "knowledge_base"
+    url: "http://localhost:8006"
+    enabled: false  # Set to true to enable
+    timeout: 60.0  # Longer timeout for vector searches
+
+    allowed_tools:
+      - "search_documents"
+      - "get_document"
+      - "summarize_document"
+      - "ask_knowledge_base"
+
+    custom_headers:
+      X-Index-Name: "my-knowledge-base"
+
+  # Example: Smart Home Server
+  # Controls IoT devices and smart home systems
+  - name: "smart_home"
+    url: "http://localhost:8007"
+    enabled: false  # Set to true to enable
+
+    auth_type: "custom"
+    auth_headers:
+      X-API-Key: "${SMART_HOME_API_KEY}"
+      X-Device-ID: "${SMART_HOME_DEVICE_ID}"
+
+    allowed_tools:
+      - "set_lights"
+      - "get_temperature"
+      - "set_thermostat"
+      - "control_music"
+      - "lock_doors"
+
+    # Safety: block some tools by default
+    blocked_tools:
+      - "unlock_doors"  # Require explicit action for security
+
+  # Example: Development Tools Server
+  # Provides development-related tools
+  - name: "dev_tools"
+    url: "http://localhost:8008"
+    enabled: false  # Set to true to enable
+
+    allowed_tools:
+      - "run_code"
+      - "check_syntax"
+      - "format_code"
+      - "get_documentation"
+      - "search_stackoverflow"
+
+    # Limit code execution for safety
+    custom_headers:
+      X-Execution-Timeout: "30"
+      X-Memory-Limit: "256MB"
+
+# Environment Variables Reference:
+# Set these environment variables before running FlexiAI with MCP enabled:
+#
+# export FS_API_TOKEN="your-filesystem-token"
+# export WEB_SEARCH_API_KEY="your-web-search-key"
+# export CALENDAR_ACCESS_TOKEN="your-calendar-token"
+# export EMAIL_USERNAME="your-email@example.com"
+# export EMAIL_PASSWORD="your-email-password"
+# export TASK_API_KEY="your-task-management-key"
+# export SMART_HOME_API_KEY="your-smart-home-key"
+# export SMART_HOME_DEVICE_ID="your-device-id"
+
+# Usage Examples:
+#
+# 1. Enable MCP with this config file:
+#    python -m flexiai --enable-mcp --mcp-config mcp_config.yaml
+#
+# 2. Enable MCP with auto-discovery:
+#    python -m flexiai --enable-mcp
+#
+# 3. Set custom timeout:
+#    python -m flexiai --enable-mcp --mcp-timeout 60
+#
+# 4. Disable fallback to built-in tools:
+#    python -m flexiai --enable-mcp --disable-mcp-fallback
+
+# Security Notes:
+# - Always use environment variables for sensitive tokens/passwords
+# - Use HTTPS URLs for production MCP servers
+# - Configure appropriate tool filtering to prevent unauthorized actions
+# - Enable SSL verification (verify_ssl: true) for production
+# - Set reasonable rate limits to prevent abuse
+# - Use authentication for all external servers
+# - Review blocked_tools lists carefully for security-sensitive operations

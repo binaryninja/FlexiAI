@@ -1,0 +1,5 @@
+servers:
+  - name: example_server
+    url: http://localhost:8001
+    enabled: true
+    timeout: 15.0
