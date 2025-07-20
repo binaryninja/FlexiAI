@@ -27,8 +27,8 @@ def get_requirements():
         requirements = []
         for line in f:
             line = line.strip()
-            # Skip empty lines and comments
-            if line and not line.startswith('#'):
+            # Skip empty lines, comments, and git URLs (not supported in install_requires)
+            if line and not line.startswith('#') and not line.startswith('git+'):
                 # Remove inline comments
                 if '#' in line:
                     line = line.split('#')[0].strip()

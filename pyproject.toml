@@ -3,12 +3,12 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "holdtranscribe"
+name = "flexiai"
 version = "1.0.1"
 authors = [
     { name = "binaryninja" },
 ]
-description = "Hotkey-Activated Voice-to-Clipboard Transcriber"
+description = "Modular AI Assistant with Hotkey Activation - Supporting Local and Remote Models for Transcription, LLM Chat, and Streaming TTS"
 readme = "README.md"
 
 # PEP 639 license declaration:
@@ -31,7 +31,7 @@ classifiers = [
     "Environment :: Console",
     "Environment :: No Input/Output (Daemon)",
 ]
-keywords = ["voice", "transcription", "whisper", "hotkey", "clipboard", "speech-to-text"]
+keywords = ["ai", "assistant", "voice", "transcription", "whisper", "hotkey", "llm", "tts", "speech-to-text", "text-to-speech", "local", "remote", "models", "modular"]
 
 dependencies = [
     "faster-whisper>=0.9.0",
@@ -66,20 +66,21 @@ dev = [
 ]
 
 [project.urls]
-Homepage      = "https://github.com/binaryninja/holdtranscribe"
-Repository    = "https://github.com/binaryninja/holdtranscribe"
-Issues        = "https://github.com/binaryninja/holdtranscribe/issues"
-Documentation = "https://github.com/binaryninja/holdtranscribe#readme"
+Homepage      = "https://github.com/binaryninja/FlexiAI"
+Repository    = "https://github.com/binaryninja/FlexiAI"
+Issues        = "https://github.com/binaryninja/FlexiAI/issues"
+Documentation = "https://github.com/binaryninja/FlexiAI#readme"
 
 [project.scripts]
-holdtranscribe = "holdtranscribe.main:main"
+flexiai = "flexiai.main:main"
+holdtranscribe = "flexiai.main:main"
 
 [tool.setuptools.packages.find]
 where   = ["."]
-include = ["holdtranscribe*"]
+include = ["flexiai*"]
 
 [tool.setuptools.package-data]
-holdtranscribe = ["*.txt", "*.md"]
+flexiai = ["*.txt", "*.md"]
 
 [tool.black]
 line-length    = 100
