@@ -35,6 +35,15 @@ from typing import Dict, Any, Optional, List
 import urllib.parse
 
 try:
+    from flexiai.config.api_keys import get_api_key
+    HAS_FLEXIAI_CONFIG = True
+except ImportError:
+    HAS_FLEXIAI_CONFIG = False
+    def get_api_key(key_name: str) -> Optional[str]:
+        """Fallback to os.getenv if flexiai config not available."""
+        return os.getenv(key_name)
+
+try:
     import aiohttp
     from aiohttp import web
     import requests
@@ -407,10 +416,10 @@ class MCPServer:
         location = params.get("location")
         units = params.get("units", "metric")
 
-        api_key = os.getenv("OPENWEATHER_API_KEY")
+        api_key = get_api_key("OPENWEATHERMAP_API_KEY")
         if not api_key:
             # Return mock data if no API key
-            logger.warning("No OpenWeather API key found, returning mock data")
+            logger.warning("No OpenWeatherMap API key found, returning mock data")
             return {
                 "location": location,
                 "current": {
@@ -419,7 +428,7 @@ class MCPServer:
                     "humidity": "65%",
                     "wind": "10 km/h"
                 },
-                "summary": f"Mock weather data for {location} (set OPENWEATHER_API_KEY for real data)"
+                "summary": f"Mock weather data for {location} (set OPENWEATHERMAP_API_KEY for real data)"
             }
 
         try:
