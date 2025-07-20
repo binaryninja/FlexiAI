@@ -19,8 +19,8 @@ from .audio import AudioRecorder, AudioUtils
 from .utils import set_debug, debug_print, get_memory_usage, detect_device, get_platform_hotkey, print_system_info
 
 
-class HoldTranscribeApp:
-    """Main HoldTranscribe application class."""
+class FlexiAIApp:
+    """Main FlexiAI application class."""
 
     def __init__(self):
         self.args: Optional[argparse.Namespace] = None

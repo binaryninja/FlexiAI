@@ -9,11 +9,11 @@ Requirements:
 """
 
 import sys
-from .app import HoldTranscribeApp
+from .app import FlexiAIApp
 
 def main():
     """Main entry point for the HoldTranscribe application."""
-    app = HoldTranscribeApp()
+    app = FlexiAIApp()
     return app.run()
 
 if __name__ == "__main__":

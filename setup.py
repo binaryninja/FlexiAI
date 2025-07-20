@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Setup script for HoldTranscribe package.
+Setup script for FlexiAI package.
 """
 
 import os
@@ -9,7 +9,7 @@ from setuptools import setup, find_packages
 
 # Read version from __init__.py
 def get_version():
-    with open(os.path.join(os.path.dirname(__file__), 'holdtranscribe', '__init__.py'), 'r') as f:
+    with open(os.path.join(os.path.dirname(__file__), 'flexiai', '__init__.py'), 'r') as f:
         content = f.read()
         version_match = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]", content, re.M)
         if version_match:
@@ -36,14 +36,14 @@ def get_requirements():
         return requirements
 
 setup(
-    name="holdtranscribe",
+    name="flexiai",
     version=get_version(),
     author="binaryninja",
     author_email="",
-    description="Hotkey-Activated Voice-to-Clipboard Transcriber",
+    description="Modular AI Assistant with Hotkey Activation - Supporting Local and Remote Models for Transcription, LLM Chat, and Streaming TTS",
     long_description=get_long_description(),
     long_description_content_type="text/markdown",
-    url="https://github.com/binaryninja/holdtranscribe",
+    url="https://github.com/binaryninja/FlexiAI",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 4 - Beta",
@@ -57,6 +57,7 @@ setup(
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
         "Topic :: Multimedia :: Sound/Audio :: Speech",
+        "Topic :: Scientific/Engineering :: Artificial Intelligence",
         "Topic :: Utilities",
         "Environment :: Console",
         "Environment :: No Input/Output (Daemon)",
@@ -77,13 +78,14 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "holdtranscribe=holdtranscribe.main:main",
+            "flexiai=flexiai.main:main",
+            "holdtranscribe=flexiai.main:main",  # Keep backward compatibility
         ],
     },
-    keywords="voice transcription whisper hotkey clipboard speech-to-text",
+    keywords="ai assistant voice transcription whisper hotkey llm tts speech-to-text text-to-speech local remote models modular",
     project_urls={
-        "Bug Reports": "https://github.com/binaryninja/holdtranscribe/issues",
-        "Source": "https://github.com/binaryninja/holdtranscribe",
+        "Bug Reports": "https://github.com/binaryninja/FlexiAI/issues",
+        "Source": "https://github.com/binaryninja/FlexiAI",
     },
     include_package_data=True,
     zip_safe=False,
