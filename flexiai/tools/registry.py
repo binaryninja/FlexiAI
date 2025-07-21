@@ -27,10 +27,17 @@ class ToolRegistry:
         self._manager = ToolManager()
         self._tool_classes: Dict[str, Type[Tool]] = {}
         self._auto_discovered = False
+        self._mcp_mode = False
 
     def _auto_discover_tools(self):
         """Automatically discover and register built-in tools."""
         if self._auto_discovered:
+            return
+
+        # Skip built-in tools if MCP mode is enabled
+        if self._mcp_mode:
+            logger.info("MCP mode enabled - skipping built-in tool discovery")
+            self._auto_discovered = True
             return
 
         logger.info("Auto-discovering FlexiAI tools...")
@@ -54,6 +61,21 @@ class ToolRegistry:
 
         logger.info(f"Auto-discovered and registered {registered_count} tools")
         self._auto_discovered = True
+
+    def set_mcp_mode(self, enabled: bool):
+        """
+        Enable or disable MCP mode.
+
+        When MCP mode is enabled, built-in tools are disabled to avoid conflicts.
+
+        Args:
+            enabled: Whether to enable MCP mode
+        """
+        self._mcp_mode = enabled
+        if enabled:
+            logger.info("MCP mode enabled - built-in tools will be disabled")
+        else:
+            logger.info("MCP mode disabled - built-in tools will be available")
 
     def register_tool_class(self, tool_class: Type[Tool]) -> None:
         """

@@ -190,6 +190,9 @@ class MCPToolIntegration:
             try:
                 logger.info("Initializing MCP integration...")
 
+                # Enable MCP mode to disable built-in tools
+                self.registry.set_mcp_mode(True)
+
                 # Create and connect client manager
                 self.client_manager = MCPClientManager(self.config)
                 await self.client_manager.connect_all()
@@ -216,6 +219,9 @@ class MCPToolIntegration:
                 return
 
             logger.info("Shutting down MCP integration...")
+
+            # Disable MCP mode to re-enable built-in tools
+            self.registry.set_mcp_mode(False)
 
             # Unregister MCP tools
             self._unregister_mcp_tools()
