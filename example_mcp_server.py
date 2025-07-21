@@ -84,9 +84,9 @@ class MCPServer:
         """Register all available tools."""
 
         # Weather tool
-        self.tools["get_weather"] = {
-            "name": "get_weather",
-            "description": "Get current weather information for any location worldwide",
+        self.tools["mcp_get_weather"] = {
+            "name": "mcp_get_weather",
+            "description": "Get current weather information for any location worldwide (MCP)",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -392,8 +392,8 @@ class MCPServer:
             raise ValueError(f"Unknown tool: {tool_name}")
 
         # Route to appropriate tool implementation
-        if tool_name == "get_weather":
-            return await self._tool_get_weather(params)
+        if tool_name == "mcp_get_weather":
+            return await self._tool_mcp_get_weather(params)
         elif tool_name == "read_file":
             return await self._tool_read_file(params)
         elif tool_name == "write_file":
@@ -411,7 +411,7 @@ class MCPServer:
         else:
             raise ValueError(f"Tool implementation not found: {tool_name}")
 
-    async def _tool_get_weather(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def _tool_mcp_get_weather(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Get weather information using OpenWeatherMap API."""
         location = params.get("location")
         units = params.get("units", "metric")
