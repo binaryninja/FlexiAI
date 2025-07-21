@@ -1185,8 +1185,8 @@ Examples:
                 debug_print("WARNING: MCP initialization failed, continuing without MCP")
             else:
                 # Refresh model functions to include MCP tools
-                if hasattr(self, 'model') and self.model and hasattr(self.model, 'refresh_available_functions'):
-                    self.model.refresh_available_functions()
+                if hasattr(self, 'assistant_model') and self.assistant_model and hasattr(self.assistant_model, 'refresh_available_functions'):
+                    self.assistant_model.refresh_available_functions()
 
             debug_print("=== APPLICATION READY ===")
             debug_print("Waiting for hotkey input...")
