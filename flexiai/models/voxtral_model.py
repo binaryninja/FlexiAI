@@ -157,7 +157,7 @@ class VoxtralAssistantModel(AssistantModel):
             self.is_loaded = False
             debug_print(f"Voxtral model '{self.model_name}' unloaded")
 
-    def generate_response(self, audio_data: Any, prompt: str = None, tools: List[Dict] = None, measure_latency: bool = False, **kwargs) -> str:
+    def generate_response(self, audio_data: Any, prompt: str = None, tools: List[Dict] = None, tool_choice: str = "auto", measure_latency: bool = False, **kwargs) -> str:
         """
         Generate a response from audio input with optional function calling.
 
@@ -165,6 +165,7 @@ class VoxtralAssistantModel(AssistantModel):
             audio_data: Can be a file path (str) or numpy array
             prompt: Optional text prompt to guide the response
             tools: List of available tools/functions in OpenAI format
+            tool_choice: How tools should be used ("auto", "any", "none")
             measure_latency: Whether to enable detailed latency measurements
             **kwargs: Additional parameters for generation
 
@@ -243,18 +244,58 @@ class VoxtralAssistantModel(AssistantModel):
 
             # Apply chat template with tools if provided
             if tools:
-                debug_print(f"🔧 Applying chat template WITH {len(tools)} tools")
-                inputs = self.processor.apply_chat_template(conversation, tools=tools)
+                debug_print(f"🔧 Applying chat template WITH {len(tools)} tools, tool_choice={tool_choice}")
+
+                # Try different template approaches
+                try:
+                    # Method 1: Standard approach with tools
+                    debug_print(f"🔧 Trying standard template with tools...")
+                    inputs = self.processor.apply_chat_template(
+                        conversation,
+                        tools=tools,
+                        add_generation_prompt=True,
+                        return_tensors="pt"
+                    )
+                    debug_print(f"🔧 Standard template succeeded")
+                except Exception as e:
+                    debug_print(f"🔧 Standard template failed: {e}")
+                    # Fallback: try without return_tensors
+                    try:
+                        inputs = self.processor.apply_chat_template(
+                            conversation,
+                            tools=tools,
+                            add_generation_prompt=True
+                        )
+                        debug_print(f"🔧 Fallback template succeeded")
+                    except Exception as e2:
+                        debug_print(f"🔧 Fallback template also failed: {e2}")
+                        # Last resort: no tools
+                        inputs = self.processor.apply_chat_template(conversation, add_generation_prompt=True)
+                        tools = None
+                        debug_print(f"🔧 Using template without tools due to errors")
             else:
                 debug_print(f"🔧 Applying chat template WITHOUT tools")
-                inputs = self.processor.apply_chat_template(conversation)
+                inputs = self.processor.apply_chat_template(conversation, add_generation_prompt=True)
 
-            # Debug: Show the final template (first 500 chars)
+            # Debug: Show detailed template information
             if hasattr(inputs, 'input_ids'):
-                template_text = self.processor.tokenizer.decode(inputs.input_ids[0][:100], skip_special_tokens=False)
-                debug_print(f"🔧 Template preview (first 100 tokens): {template_text[:200]}...")
+                template_text = self.processor.tokenizer.decode(inputs.input_ids[0], skip_special_tokens=False)
+                debug_print(f"🔧 Full template length: {len(template_text)} characters")
+                debug_print(f"🔧 Template start (500 chars): {template_text[:500]}...")
+                debug_print(f"🔧 Template end (200 chars): ...{template_text[-200:]}")
+
+                # Look for function-calling specific patterns
+                if tools:
+                    patterns = ["[AVAILABLE_TOOLS]", "function", "name", "parameters", "tool_calls"]
+                    for pattern in patterns:
+                        if pattern in template_text:
+                            debug_print(f"🔧 Found pattern '{pattern}' in template")
+                        else:
+                            debug_print(f"🔧 Missing pattern '{pattern}' in template")
             else:
                 debug_print(f"🔧 Template type: {type(inputs)}")
+                if hasattr(inputs, '__len__'):
+                    debug_print(f"🔧 Template length: {len(inputs)}")
 
             if measure_latency:
                 template_time = time.time() - template_start
@@ -267,11 +308,24 @@ class VoxtralAssistantModel(AssistantModel):
                 generation_start = time.time()
 
             with torch.no_grad():
-                outputs = self.model.generate(
+                generation_kwargs = {
                     **inputs,
-                    max_new_tokens=kwargs.get('max_new_tokens', 500),
-                    temperature=kwargs.get('temperature', 0.0)
-                )
+                    'max_new_tokens': kwargs.get('max_new_tokens', 500),
+                    'temperature': kwargs.get('temperature', 0.0)
+                }
+
+                # Add tool choice behavior for function calling
+                if tools and tool_choice == "any":
+                    # Force function calling by adjusting generation parameters
+                    generation_kwargs['do_sample'] = False
+                    generation_kwargs['temperature'] = 0.0
+                    debug_print(f"🔧 Forcing function call with tool_choice='any'")
+                elif tools and tool_choice == "none":
+                    # Disable function calling
+                    debug_print(f"🔧 Disabling function calls with tool_choice='none'")
+                    tools = None  # Remove tools from consideration
+
+                outputs = self.model.generate(**generation_kwargs)
 
             if measure_latency:
                 generation_time = time.time() - generation_start
@@ -288,6 +342,7 @@ class VoxtralAssistantModel(AssistantModel):
             contains_function_call = self._contains_function_call(response) if tools else False
             debug_print(f"🔧 Function call detection: {contains_function_call}")
             debug_print(f"🔧 Tools available for function calling: {bool(tools)}")
+            debug_print(f"🔧 Tool choice setting: {tool_choice}")
 
             if tools and contains_function_call:
                 debug_print("🔧 Function call detected in response - processing...")

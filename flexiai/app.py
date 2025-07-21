@@ -524,6 +524,7 @@ Examples:
                     temp_file,
                     prompt="Please provide a helpful response to the user's audio input.",
                     tools=tools,
+                    tool_choice="any" if tools else "none",
                     measure_latency=self.args.measure_latency
                 )
 
