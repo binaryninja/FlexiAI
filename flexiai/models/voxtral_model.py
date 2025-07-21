@@ -280,10 +280,23 @@ class VoxtralAssistantModel(AssistantModel):
             decoded_outputs = self.processor.batch_decode(outputs[:, inputs.input_ids.shape[1]:], skip_special_tokens=True)
             response = decoded_outputs[0].strip()
 
+            # Debug: Show raw model response
+            debug_print(f"🔧 Raw model response: '{response}'")
+            debug_print(f"🔧 Response length: {len(response)} characters")
+
             # Check if response contains function calls
-            if tools and self._contains_function_call(response):
-                debug_print("🔧 Function call detected in response")
+            contains_function_call = self._contains_function_call(response) if tools else False
+            debug_print(f"🔧 Function call detection: {contains_function_call}")
+            debug_print(f"🔧 Tools available for function calling: {bool(tools)}")
+
+            if tools and contains_function_call:
+                debug_print("🔧 Function call detected in response - processing...")
                 return self._handle_function_call(response, tools, audio_file, measure_latency, **kwargs)
+            else:
+                if tools:
+                    debug_print("🔧 No function call detected despite tools being available")
+                else:
+                    debug_print("🔧 No tools provided - skipping function call detection")
 
             if measure_latency:
                 decode_time = time.time() - decode_start
@@ -313,6 +326,8 @@ class VoxtralAssistantModel(AssistantModel):
 
     def _contains_function_call(self, response: str) -> bool:
         """Check if the response contains a function call pattern."""
+        debug_print(f"🔧 Function call detection on response: '{response[:100]}...'")
+
         # Look for function call patterns in the response
         function_indicators = [
             '[{"name":',
@@ -324,13 +339,25 @@ class VoxtralAssistantModel(AssistantModel):
         ]
 
         response_lower = response.lower()
+
+        # Debug: Check each pattern
+        debug_print(f"🔧 Checking function call patterns:")
+        for indicator in function_indicators:
+            found = indicator.lower() in response_lower
+            debug_print(f"   • '{indicator}': {found}")
+
         contains_call = any(indicator.lower() in response_lower for indicator in function_indicators)
+        debug_print(f"🔧 Pattern-based detection: {contains_call}")
 
         # Also check if the response starts with [ and contains "name" and "arguments"
         stripped = response.strip()
-        if stripped.startswith('[') and '"name"' in stripped and '"arguments"' in stripped:
+        bracket_check = stripped.startswith('[') and '"name"' in stripped and '"arguments"' in stripped
+        debug_print(f"🔧 Bracket format check (starts with [ + has name + has arguments): {bracket_check}")
+
+        if bracket_check:
             contains_call = True
 
+        debug_print(f"🔧 Final function call detection result: {contains_call}")
         return contains_call
 
     def _handle_function_call(self, response: str, tools: List[Dict], audio_file: str, measure_latency: bool, **kwargs) -> str:
