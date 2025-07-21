@@ -253,7 +253,6 @@ class VoxtralAssistantModel(AssistantModel):
                     inputs = self.processor.apply_chat_template(
                         conversation,
                         tools=tools,
-                        add_generation_prompt=True,
                         return_tensors="pt"
                     )
                     debug_print(f"🔧 Standard template succeeded")
@@ -263,19 +262,18 @@ class VoxtralAssistantModel(AssistantModel):
                     try:
                         inputs = self.processor.apply_chat_template(
                             conversation,
-                            tools=tools,
-                            add_generation_prompt=True
+                            tools=tools
                         )
                         debug_print(f"🔧 Fallback template succeeded")
                     except Exception as e2:
                         debug_print(f"🔧 Fallback template also failed: {e2}")
                         # Last resort: no tools
-                        inputs = self.processor.apply_chat_template(conversation, add_generation_prompt=True)
+                        inputs = self.processor.apply_chat_template(conversation)
                         tools = None
                         debug_print(f"🔧 Using template without tools due to errors")
             else:
                 debug_print(f"🔧 Applying chat template WITHOUT tools")
-                inputs = self.processor.apply_chat_template(conversation, add_generation_prompt=True)
+                inputs = self.processor.apply_chat_template(conversation)
 
             # Debug: Show detailed template information
             if hasattr(inputs, 'input_ids'):
