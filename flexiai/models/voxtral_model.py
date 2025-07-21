@@ -57,6 +57,20 @@ class VoxtralAssistantModel(AssistantModel):
 
         debug_print(f"🔧 Registered {len(self.available_functions)} tools: {list(self.available_functions.keys())}")
 
+    def refresh_available_functions(self):
+        """Refresh available functions to include newly registered tools (e.g., MCP tools)."""
+        # Get available tools from the tool registry (including MCP tools)
+        available_tools = tool_registry.list_available_tools()
+
+        self.available_functions = {}
+        for tool_name in available_tools:
+            tool = tool_registry.get_tool(tool_name)
+            if tool:
+                # Create a wrapper function that uses the tool system
+                self.available_functions[tool_name] = self._create_tool_wrapper(tool_name)
+
+        debug_print(f"🔧 Refreshed {len(self.available_functions)} tools: {list(self.available_functions.keys())}")
+
     def _create_tool_wrapper(self, tool_name: str):
         """
         Create a wrapper function for a tool that converts tool results to JSON strings.
