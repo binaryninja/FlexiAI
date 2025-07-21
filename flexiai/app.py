@@ -507,6 +507,16 @@ Examples:
                     try:
                         tools = self.mcp_integration.get_tools_for_assistant()
                         debug_print(f"Available tools for assistant: {len(tools)}")
+                        if tools:
+                            debug_print("🔧 Tools being passed to assistant:")
+                            for i, tool in enumerate(tools):
+                                if 'function' in tool:
+                                    func = tool['function']
+                                    debug_print(f"   {i+1}. {func.get('name', 'unknown')} - {func.get('description', 'no description')[:60]}...")
+                                else:
+                                    debug_print(f"   {i+1}. {tool}")
+                        else:
+                            debug_print("⚠️ No tools available for assistant")
                     except Exception as e:
                         debug_print(f"Failed to get MCP tools: {e}")
 

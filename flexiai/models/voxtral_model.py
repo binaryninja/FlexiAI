@@ -177,6 +177,19 @@ class VoxtralAssistantModel(AssistantModel):
         import time
 
         try:
+            # Debug: Show tools being passed to model
+            debug_print(f"🔧 Tools passed to VoxtralAssistantModel.generate_response:")
+            if tools:
+                debug_print(f"   • Number of tools: {len(tools)}")
+                for i, tool in enumerate(tools):
+                    if 'function' in tool:
+                        func = tool['function']
+                        debug_print(f"   • Tool {i+1}: {func.get('name', 'unknown')} - {func.get('description', 'no description')[:50]}...")
+                    else:
+                        debug_print(f"   • Tool {i+1}: {tool}")
+            else:
+                debug_print(f"   • No tools provided (tools is None)")
+
             # If tools are provided, set up default weather tool for testing
             if tools is None and 'get_weather' in self.available_functions:
                 tools = [
@@ -230,9 +243,18 @@ class VoxtralAssistantModel(AssistantModel):
 
             # Apply chat template with tools if provided
             if tools:
+                debug_print(f"🔧 Applying chat template WITH {len(tools)} tools")
                 inputs = self.processor.apply_chat_template(conversation, tools=tools)
             else:
+                debug_print(f"🔧 Applying chat template WITHOUT tools")
                 inputs = self.processor.apply_chat_template(conversation)
+
+            # Debug: Show the final template (first 500 chars)
+            if hasattr(inputs, 'input_ids'):
+                template_text = self.processor.tokenizer.decode(inputs.input_ids[0][:100], skip_special_tokens=False)
+                debug_print(f"🔧 Template preview (first 100 tokens): {template_text[:200]}...")
+            else:
+                debug_print(f"🔧 Template type: {type(inputs)}")
 
             if measure_latency:
                 template_time = time.time() - template_start
