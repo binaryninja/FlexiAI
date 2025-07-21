@@ -21,7 +21,6 @@ from .base import (
     ToolValidationError
 )
 
-from .weather import WeatherTool
 from .registry import tool_registry
 
 __all__ = [
@@ -31,7 +30,6 @@ __all__ = [
     'ToolManager',
     'ToolError',
     'ToolValidationError',
-    'WeatherTool',
     'tool_registry'
 ]
 

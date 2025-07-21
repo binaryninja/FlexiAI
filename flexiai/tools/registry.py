@@ -9,7 +9,6 @@ import logging
 from typing import Dict, List, Type, Optional
 
 from .base import Tool, ToolManager
-from .weather import WeatherTool
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +37,6 @@ class ToolRegistry:
 
         # Register built-in tools
         builtin_tools = [
-            WeatherTool,
             # Add more built-in tools here as they are created
         ]
 
